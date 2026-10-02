@@ -1,0 +1,166 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  PROJECT_MANAGER
+  TEAM_MEMBER
+  CLIENT
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model User {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  avatar    String?
+  bio       String?
+  role      Role     @default(TEAM_MEMBER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  createdProjects Project[]       @relation("ProjectCreator")
+  projects        Project[]       @relation("ProjectMembers", fields: [projectIds], references: [id]) // Many-to-many
+  projectIds      String[]        @db.ObjectId
+  assignedTasks   Task[]          @relation("TaskAssignee")
+  createdTasks    Task[]          @relation("TaskCreator")
+  comments        Comment[]
+  timeEntries     TimeEntry[]
+  sentMessages    ChatMessage[]
+
+  @@map("users")
+}
+
+model Project {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  status      ProjectStatus @default(ACTIVE)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Creator
+  creatorId String @db.ObjectId
+  creator   User   @relation("ProjectCreator", fields: [creatorId], references: [id])
+
+  // Many-to-many with Users
+  memberIds String[] @db.ObjectId
+  members   User[]   @relation("ProjectMembers", fields: [memberIds], references: [id])
+
+  // Relations
+  tasks        Task[]
+  chatMessages ChatMessage[]
+
+  @@map("projects")
+}
+
+model Task {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  title          String
+  description    String?
+  status         TaskStatus   @default(TODO)
+  priority       TaskPriority @default(MEDIUM)
+  dueDate        DateTime?
+  estimatedHours Float?       // Estimated time to complete
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  projectId String  @db.ObjectId
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  assigneeId String? @db.ObjectId
+  assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
+
+  creatorId String @db.ObjectId
+  creator   User   @relation("TaskCreator", fields: [creatorId], references: [id])
+
+  comments    Comment[]
+  timeEntries TimeEntry[]
+
+  @@map("tasks")
+}
+
+model Comment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  taskId String @db.ObjectId
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  authorId String @db.ObjectId
+  author   User   @relation(fields: [authorId], references: [id])
+
+  @@map("comments")
+}
+
+model TimeEntry {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  startTime   DateTime // When they started working
+  endTime     DateTime // When they finished working
+  theoDuration    Int    // Duration in minutes (calculated: endTime - startTime)
+  realDuration    Int    // Duration in minutes 
+  description String?
+  date        DateTime @default(now()) // The day this entry belongs to
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  taskId String @db.ObjectId
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@map("time_entries")
+}
+
+model ChatMessage {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  content   String
+  createdAt DateTime @default(now())
+
+  // Relations
+  projectId String  @db.ObjectId
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  senderId String @db.ObjectId
+  sender   User   @relation(fields: [senderId], references: [id])
+
+  @@map("chat_messages")
+}
